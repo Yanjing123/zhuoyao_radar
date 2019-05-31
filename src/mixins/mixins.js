@@ -105,7 +105,7 @@ module.exports = {
             // 机器人
             this.botAnalyze(data.sprite_list);
           } else {
-            this.buildMarkersByData(data.sprite_list);
+            this.buildMarkersByData(data.sprite_list, this.mode !== 'wide');
           }
 
           if (this.mode === 'wide') {

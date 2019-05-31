@@ -22,6 +22,24 @@
     </div>
     <div id="qmap"></div>
     <radar-progress :show="progressShow" :max-range="max_range" :thread="thread" :percent="progressPercent"></radar-progress>
+    <div id="locations">
+      <table>
+        <thead>
+          <th>序号</th>
+          <th>剩余时间</th>
+          <th>妖灵</th>
+          <th>坐标</th>
+        </thead>
+        <tbody>
+          <tr v-for="(l,index) in locations" :key="l.location">
+            <td>{{index + 1}}</td>
+            <td>{{l.fintime}}</td>
+            <td>{{l.name}}</td>
+            <td><a @click="copyToClipboard(l)" href="#">复制位置</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <el-dialog
     title="自定义筛选"
     :visible.sync="filterDialogVisible"
@@ -163,7 +181,8 @@ export default {
         latitude: 39.9610780334
       },
       progressShow: false,
-      filterDialogVisible:false
+      filterDialogVisible:false,
+      locations: []
     };
   },
   mounted() {
@@ -240,13 +259,44 @@ export default {
     /**
      * 根据查询结果过滤数据，打标记
      */
-    buildMarkersByData: function(t) {
+    buildMarkersByData: function(t, clearOldLocations) {
+       let me = this;
+
+      if (clearOldLocations) {
+        this.locations = [];
+      }
+
       if (t && t.length) {
         t.forEach(item => {
           if (
             this.fit[0] === 'special' ||
             this.fit.indexOf(item.sprite_id) > -1
           ) {
+            let newposition = this.gcj02towgs84((item.longtitude / 1e6), (item.latitude / 1e6));
+            let time = new Date((item.gentime + item.lifetime) * 1000) - new Date();
+            let second = time / 1000;
+            let minute = Math.floor(second / 60);
+            second = Math.floor(second % 60);
+            let fintime = minute + '分' + second + '秒';
+
+            let location = {
+              name: this.getYaolingById(item.sprite_id).Name,
+              fintime: fintime,
+              location: `${newposition[1]},${newposition[0]}`
+            };
+            
+            let timer = setInterval(function() {
+              time = time - 1000;
+
+              if (time > 0) {
+                location.fintime = Math.floor(time / 1000 / 60) + '分' + Math.floor(time / 1000 % 60) + "秒";
+              } else {
+                clearInterval(timer);
+                me.locations.splice(me.locations.indexOf(location), 1);
+              }
+            }, 1000);
+
+            this.locations.push(location);
             this.addMarkers(item);
           }
         });
@@ -312,6 +362,39 @@ export default {
     getBossLevelConfig: function() {
       return;
       this.sendMessage(this.initSocketMessage('10040'));
+    },
+    copyToClipboard (location) {
+      let text = location.location;
+
+      if(text.indexOf('-') !== -1) {
+          let arr = text.split('-');
+          text = arr[0] + arr[1];
+      }
+
+      var textArea = document.createElement("textarea");
+      textArea.style.position = 'fixed';
+      textArea.style.top = '0';
+      textArea.style.left = '0';
+      textArea.style.width = '2em';
+      textArea.style.height = '2em';
+      textArea.style.padding = '0';
+      textArea.style.border = 'none';
+      textArea.style.outline = 'none';
+      textArea.style.boxShadow = 'none';
+      textArea.style.background = 'transparent';
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+
+      try {
+        var successful = document.execCommand('copy');
+      } catch (err) {
+        alert('该浏览器不支持点击复制到剪贴板');
+      }
+
+      document.body.removeChild(textArea);
+
+      this.locations.splice(this.locations.indexOf(location), 1);
     },
     /**
      * 是否为活动up妖灵
